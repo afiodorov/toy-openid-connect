@@ -3,7 +3,7 @@ import os
 import uuid
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.postgresql import UUID
@@ -60,14 +60,14 @@ def create_client():
     return jsonify({"client_id": new_client.id}), HTTPStatus.CREATED
 
 
-@app.route("/auth", methods=["GET"])
+@app.route("/authorize", methods=["GET"])
 def auth():
     client_id = request.args.get("client_id")
-    redirect_uri = request.args.get("redirect_uri")
+    redirect_url = request.args.get("redirect_url")
     response_type = request.args.get("response_type")
-    scopes = request.args.get("scope", default="").split(" ")
+    scopes = request.args.get("scopes")
 
-    if not all([client_id, redirect_uri, response_type, scopes]):
+    if not client_id or not redirect_url or not response_type or not scopes:
         return "Missing required query parameters", HTTPStatus.BAD_REQUEST
 
     client = Client.query.filter_by(id=client_id).first()
@@ -75,11 +75,17 @@ def auth():
     if not client:
         return "Invalid client_id", HTTPStatus.BAD_REQUEST
 
-    if client.redirect_url != redirect_uri:
-        return "Invalid redirect_uri", HTTPStatus.BAD_REQUEST
+    if response_type != "code":
+        return "Response type not supported", HTTPStatus.BAD_REQUEST
 
+    if client.redirect_url != redirect_url:
+        return "Invalid redirect_url", HTTPStatus.BAD_REQUEST
+
+    scopes = scopes.split(" ")
     if "openid" not in scopes:
         return "Not an openid request", HTTPStatus.BAD_REQUEST
+
+    return send_from_directory("static", "auth.html")
 
 
 if __name__ == "__main__":
